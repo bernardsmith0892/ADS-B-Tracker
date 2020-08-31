@@ -3,6 +3,50 @@ from numpy import *
 import pyModeS as pms
 import time
 
+def print_dashboard(adsb_objects):
+	curr_time = time.strftime('%d/%b/%Y %H:%M:%S', time.localtime())
+	print(f"As of {curr_time}...")
+	
+	# Column sizes:
+	# ICAO - 6, Callsign - 8, Lat - 9, Lon - 9, Alt - 8, Vel - 8, Head - 7, Age - 5
+	header = """
+╔══════╦════════╦═════════╦═════════╦════════╦════════╦═══════╦═════╗
+║ ICAO ║Callsign║Latitude ║Longitude║Altitude║Velocity║Heading║ Age ║
+╠══════╬════════╬═════════╬═════════╬════════╬════════╬═══════╬═════╣"""
+	print(header)
+	
+	for o in adsb_objects.values():
+		line = f"║{o.icao}║"
+		
+		if o.callsign == None:
+			line += " " * 8 + "║"
+		else:
+			line += '{:{w}.{w}}'.format(o.callsign, w = '8') + "║"
+						
+		if o.pos[0] == None or o.pos[1] == None:
+			line += " " * 9 + "║" + " " * 9 + "║"
+		else:
+			line += '{:{w}.{w}}'.format(str(o.pos[0]), w = '9') + "║"
+			line += '{:{w}.{w}}'.format(str(o.pos[1]), w = '9') + "║"
+			
+		if o.altitude == None:
+			line += " " * 8 + "║"
+		else:
+			line += '{:{w}.{w}}'.format(str(o.altitude), w = '8') + "║"
+			
+		if o.velocity == None:
+			line += " " * 8 + "║" + " " * 7 + "║"
+		else:
+			line += '{:{w}.{w}}'.format(str(o.velocity[0]), w = '8') + "║"
+			line += '{:{w}.{w}}'.format(str(o.velocity[1]), w = '7') + "║"
+			
+		line += '{:{w}.{w}}'.format(str( int( time.time() - o.last_update) ), w = '5') + "║"
+	
+		print(line)
+		
+	print("╚══════╩════════╩═════════╩═════════╩════════╩════════╩═══════╩═════╝")
+	print()
+
 class Packet:
 	msg = None
 	timestamp = -1
@@ -25,11 +69,11 @@ class Packet:
 		return f"<ADSB_Packet msg:{self.msg}>"
 		
 	def __str__(self):
-		return f"[{self.timestamp}] Short: {self.short} DF{self.df} ICAO: {self.icao} typecode: {self.typecode} MSG:{self.msg}"
+		return f"[{self.timestamp}] {'Short' if self.short else 'Long'} DF{self.df} ICAO: {self.icao} typecode: {self.typecode} MSG:{self.msg}"
 		
 class ADSB_Object:
 	icao = None
-	callsign = "NONE___"
+	callsign = None
 	altitude = None
 	heading = None
 	velocity = None
@@ -45,7 +89,7 @@ class ADSB_Object:
 		return f"<ADSB_Object icao:{self.icao}>"
 		
 	def __str__(self):
-		ret_str = f"{self.icao}\t{self.callsign}  \t{self.pos[0]}\t{self.pos[1]}\t{self.altitude}\t{self.velocity}\t{self.heading}\t{ int( time.time() - self.last_update) }"
+		ret_str = f"{self.icao},{self.callsign},{self.pos[0]},{self.pos[1]},{self.altitude},{self.velocity},{self.heading},{ int( time.time() - self.last_update) }"
 		
 		return ret_str
 	
@@ -69,15 +113,13 @@ class ADSB_Object:
 	def process_long_packet(self, packet):
 		# Process callsign
 		if packet.typecode >= 1 and packet.typecode <= 4:
-			print(pms.adsb.callsign( packet.msg ))
 			self.callsign = pms.adsb.callsign( packet.msg )
 		
 		# Process surface information
 		elif packet.typecode >= 5 and packet.typecode <= 8:
 			self.altitude = pms.adsb.altitude( packet.msg )
 			self.pos = pms.adsb.position_with_ref( packet.msg, self.pos_ref[0], self.pos_ref[1] )
-			self.velocity = pms.adsb.velocity( packet.msg )[0]
-			self.heading = pms.adsb.velocity( packet.msg )[1]
+			self.velocity = pms.adsb.velocity( packet.msg )
 		
 		# Process airborne information
 		elif packet.typecode >= 9 and packet.typecode <= 18:	
@@ -86,8 +128,7 @@ class ADSB_Object:
 						
 		# Process velocity and heading information
 		elif packet.typecode == 19:		
-			self.velocity = pms.adsb.velocity( packet.msg )[0]
-			self.heading = pms.adsb.velocity( packet.msg )[1]
+			self.velocity = pms.adsb.velocity( packet.msg )
 			# self.heading = pms.adsb.speed_heading( packet.msg )
 		
 		

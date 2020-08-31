@@ -27,17 +27,12 @@ def signal_process( Qin, source, stop_flag, log  ):
 	
 	while(  not stop_flag.is_set() ):
 		curr_time = time.strftime('%d/%b/%Y %H:%M:%S', time.localtime())
-		print(f"As of {curr_time}...")
-		print(f"ICAO\tCall\t\tLat\t\tLon\t\tAlt\tVel\tHead\tAge" )
-		print( "----\t----\t\t---\t\t---\t\t---\t---\t----\t---" )
-		for o in adsb_objects.values():
-			print(o)
+		ao.print_dashboard( adsb_objects )
 				
 		# Get streaming chunk
 		y = Qin.get();
 			
 		idx_preamble = asp.detectPreamble(y)		
-		# print(f"Detected {len(idx_preamble)} possible preambles...")
 		
 		for n in idx_preamble:
 			msg = asp.decode_ADSB( abs(y[int(n) : int(n) + row_size]) )
@@ -51,14 +46,7 @@ def signal_process( Qin, source, stop_flag, log  ):
 					adsb_objects[pkt.icao].process_packet( pkt )
 				elif pkt.icao != None:
 					adsb_objects[pkt.icao] = ao.ADSB_Object( pkt )
-				
-				'''
-				packet = f"[{curr_time}] CRC OK, DF{pms.df(msg)} ICAO: {pms.adsb.icao(msg)} typecode: {pms.adsb.typecode(msg)} MSG:{msg}"
-				
-				print(packet)
-				with open(log, 'a') as f:
-					f.write(packet + '\n')
-				'''
+					
 		Qin.queue.clear()
 	
 		

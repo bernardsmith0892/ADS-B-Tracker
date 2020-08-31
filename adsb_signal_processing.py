@@ -33,7 +33,7 @@ def detectPreamble(y):
 	Returns
 	-------
 	list
-		A list of indexes of potential preambles in the signal
+		A list of indices of potential preambles in the signal
 	"""
 	
 	idx_preamble = []
