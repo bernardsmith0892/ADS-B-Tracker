@@ -2,26 +2,6 @@ import numpy as np
 from numpy import *
 import pyModeS as pms
 
-def bool2Hex(lst):
-	"""Encodes a list of boolean values into a hex string.
-	
-	Function taken from UC Berkeley EE123 Lab 2. Actually, most of the basic idea of this was from that lab.
-	
-	Parameters
-	----------
-	lst : list[bool]
-		The boolean list to encode.
-		
-	Returns
-	-------
-	string
-		The encoded hex string.
-	"""
-	
-	tmp =  ''.join(['1' if x else '0' for x in lst])
-	return hex(int(tmp,2))[2:]
-
-
 def detectPreamble(y):
 	"""Returns a list of indices for detected ADS-B preambles in the RF signal.
 	
@@ -40,18 +20,18 @@ def detectPreamble(y):
 	
 	y_mean = np.mean(y)
 	y_std = np.std(y)
-	thresh = y_mean + 4 * y_std
+	thresh = y_mean + 3 * y_std
 	
 	for i in range( len(y) - 16 ):
 		if y[i] >= thresh:
 			chunk = abs(y[i : i + 16])
 			high_bits = np.array([chunk[0], chunk[2], chunk[7], chunk[9]])
 			low_bits = np.concatenate([[chunk[1]], chunk[3:7], [chunk[8]], chunk[10:16]])
-
+			
 			high_mean = np.mean(high_bits)
 			low_mean = np.mean(low_bits)
 
-			if(high_mean > low_mean):
+			if(high_mean > low_mean - y_std):
 				idx_preamble.append(i)	
 	
 	return idx_preamble
@@ -80,8 +60,10 @@ def decode_ADSB(signal):
 		return
 	
 	# Decode the signal to binary (assume Manchester encoded)
+	# Taken from the EE123 Lab 2 code
 	bits = signal[16::2] > signal[17::2]
-	msg = bool2Hex(bits)
+	tmp =  ''.join(['1' if x else '0' for x in bits])
+	msg = hex(int(tmp,2))[2:]
 	
 	# CRC check for long message
 	if (pms.crc(msg) == 0):

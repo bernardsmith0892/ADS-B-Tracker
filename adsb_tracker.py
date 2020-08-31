@@ -1,5 +1,4 @@
 # Import functions and libraries
-from __future__ import division
 import numpy as np
 from numpy import *
 from rtlsdr import RtlSdr
@@ -57,7 +56,7 @@ def main():
 	N_samples = 2048000 # number of sdr samples for each chunk of data
 	log = "adsb.log"
 
-	pos_ref = [21.315603, -157.858093] # Honolulu's latitude, longitude for initializing the map
+	pos_ref = [21.315603, -157.858093] # Honolulu's latitude, longitude
 	
 	# create an input output FIFO queues
 	Qin = queue.Queue()
