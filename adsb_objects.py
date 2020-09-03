@@ -2,8 +2,26 @@ import numpy as np
 from numpy import *
 import pyModeS as pms
 import time
+import pandas as pd
 
 def print_dashboard(adsb_objects):
+	
+	
+	curr_time = time.strftime('%d/%b/%Y %H:%M:%S', time.localtime())
+	print(f"As of {curr_time}...")
+	
+	if len(adsb_objects) > 0:
+		df = pd.DataFrame( adsb_objects.values() )
+		df.columns = ['ICAO', 'Callsign', 'Latitude', 'Longitude', 'Altitude', 'Velocity', 'Heading', 'Age']
+	
+		print( df.to_string(index=False) )
+	else:
+		print("None found...")
+	
+	print()
+
+
+def print_dashboard_ASCII(adsb_objects):
 	curr_time = time.strftime('%d/%b/%Y %H:%M:%S', time.localtime())
 	print(f"As of {curr_time}...")
 	
@@ -75,15 +93,16 @@ class ADSB_Object:
 	icao = None
 	callsign = None
 	altitude = None
-	heading = None
 	velocity = None
-	pos = (None, None)
+	heading = None
+	pos = [None, None]
 	pos_ref = [21.315603, -157.858093] # Reference for Honolulu, Hawaii
 	last_update = None
 	
-	def __init__(self, packet):
+	def __init__(self, packet=None):
 		self.pos_ref = [21.315603, -157.858093]
-		self.process_packet( packet )
+		if packet != None:
+			self.process_packet( packet )
 		
 	def __repr__(self):
 		return f"<ADSB_Object icao:{self.icao}>"
@@ -95,6 +114,28 @@ class ADSB_Object:
 	
 	def __eq__(self, icao):
 		return self.icao == icao
+		
+	def __iter__(self):
+		yield(self.icao)
+		yield(self.callsign)
+		yield(self.pos[0])
+		yield(self.pos[1])
+		yield(self.altitude)
+		yield(self.velocity)
+		yield(self.heading)		
+		yield(int( time.time() - self.last_update))
+		
+	def to_dict(self):
+		return {
+		'icao': self.icao,
+		'callsign': self.callsign,
+		'lat': self.pos[0],
+		'lon': self.pos[1],
+		'altitude': self.altitude,
+		'velocity': self.velocity,
+		'heading': self.heading,
+		'last_update': int( time.time() - self.last_update)
+		}
 	
 	def process_packet(self, packet):
 		# If this object doesn't have an ICAO value, get it from the packet
@@ -119,7 +160,8 @@ class ADSB_Object:
 		elif packet.typecode >= 5 and packet.typecode <= 8:
 			self.altitude = pms.adsb.altitude( packet.msg )
 			self.pos = pms.adsb.position_with_ref( packet.msg, self.pos_ref[0], self.pos_ref[1] )
-			self.velocity = pms.adsb.velocity( packet.msg )
+			self.velocity = pms.adsb.velocity( packet.msg )[0]
+			self.heading = pms.adsb.velocity( packet.msg )[1]
 		
 		# Process airborne information
 		elif packet.typecode >= 9 and packet.typecode <= 18:	
@@ -127,8 +169,9 @@ class ADSB_Object:
 			self.pos = pms.adsb.position_with_ref( packet.msg, self.pos_ref[0], self.pos_ref[1] )
 						
 		# Process velocity and heading information
-		elif packet.typecode == 19:		
-			self.velocity = pms.adsb.velocity( packet.msg )
+		elif packet.df == 17 and packet.typecode == 19:		
+			self.velocity = pms.adsb.velocity( packet.msg )[0]
+			self.heading = pms.adsb.velocity( packet.msg )[1]
 			# self.heading = pms.adsb.speed_heading( packet.msg )
 		
 		

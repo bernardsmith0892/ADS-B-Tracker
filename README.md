@@ -5,14 +5,21 @@ The foundational code comes from UC Berkeley's EE123 Lab 2, namely the main thre
 
 Example:
 ```
-[1598868525.1129477] Long DF17 ICAO: abde34 typecode: 29 MSG:8dabde34ea1f58868f3c08056c88
-[1598868526.0508988] Short DF11 ICAO: abde34 typecode: None MSG:5dabde34835935
-[1598868526.053882] Short DF23 ICAO: None typecode: None MSG:bb57bc6906b26a
-As of 31/Aug/2020 00:08:48...
+$ python3.8 .\adsb_tracker.py
+[1598916581.5571182] Long DF17 ICAO: aa75ef typecode: 4 MSG:8daa75ef25541332cf8c2080b14f
+[1598916582.771031] Short DF11 ICAO: aa75ef typecode: None MSG:5daa75efd05edf
+[1598916582.7750278] Short DF23 ICAO: None typecode: None MSG:bb54ebdfa0bdbe
+[1598916582.8580236] Long DF17 ICAO: aa75ef typecode: 19 MSG:8daa75ef991079005828063b6635
+As of 31/Aug/2020 13:29:43...
 
 ╔══════╦════════╦═════════╦═════════╦════════╦════════╦═══════╦═════╗
 ║ ICAO ║Callsign║Latitude ║Longitude║Altitude║Velocity║Heading║ Age ║
 ╠══════╬════════╬═════════╬═════════╬════════╬════════╬═══════╬═════╣
-║abde34║FDX77___║21.22485 ║-157.9546║5725    ║292     ║242.3  ║2    ║
+║a499c3║HAL1307_║21.32525 ║-157.9481║100     ║122     ║90.47  ║435  ║
+║aa75ef║UAL2380_║21.32525 ║-157.9552║225     ║120     ║89.52  ║0    ║
+║a2b677║        ║         ║         ║        ║        ║       ║208  ║
+║adfbde║TEST1234║         ║         ║        ║        ║       ║439  ║
+║000000║        ║         ║         ║        ║        ║       ║230  ║
+║aa871b║        ║         ║         ║        ║        ║       ║85   ║
 ╚══════╩════════╩═════════╩═════════╩════════╩════════╩═══════╩═════╝
 ```

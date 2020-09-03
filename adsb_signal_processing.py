@@ -31,7 +31,7 @@ def detectPreamble(y):
 			high_mean = np.mean(high_bits)
 			low_mean = np.mean(low_bits)
 
-			if(high_mean > low_mean - y_std):
+			if(high_mean > low_mean):
 				idx_preamble.append(i)	
 	
 	return idx_preamble

@@ -6,7 +6,13 @@ import pyModeS as pms
 import threading, time, queue
 import adsb_signal_processing as asp
 import adsb_objects as ao
-				
+import pandas as pd
+import app
+
+pos_ref = {'lat': 21.315603, 'lon': -157.858093} # Honolulu's latitude, longitude
+adsb_objects = {}
+packets = []
+
 def sdr_read( Qin, sdr, N_samples, stop_flag ):
 	while (  not stop_flag.is_set() ):
 		try:
@@ -22,7 +28,6 @@ def sdr_read( Qin, sdr, N_samples, stop_flag ):
 
 def signal_process( Qin, source, stop_flag, log  ):
 	row_size = 16 + 112*2
-	adsb_objects = {}
 	
 	while(  not stop_flag.is_set() ):
 		curr_time = time.strftime('%d/%b/%Y %H:%M:%S', time.localtime())
@@ -31,12 +36,13 @@ def signal_process( Qin, source, stop_flag, log  ):
 		# Get streaming chunk
 		y = Qin.get();
 			
+		packet_diff = len(packets)
 		idx_preamble = asp.detectPreamble(y)		
-		
 		for n in idx_preamble:
 			msg = asp.decode_ADSB( abs(y[int(n) : int(n) + row_size]) )
 			if msg != None:
 				pkt = ao.Packet(msg, time.time())
+				packets.append( pkt )
 				print( pkt )
 				with open(log, 'a') as f:
 					f.write(f"[{curr_time}] {msg}\n")
@@ -45,6 +51,9 @@ def signal_process( Qin, source, stop_flag, log  ):
 					adsb_objects[pkt.icao].process_packet( pkt )
 				elif pkt.icao != None:
 					adsb_objects[pkt.icao] = ao.ADSB_Object( pkt )
+		
+		if packet_diff == len(packets):
+			packets.append(f"[{curr_time}] None received...")
 					
 		Qin.queue.clear()
 	
@@ -55,8 +64,6 @@ def main():
 	gain = 49.6 # gain
 	N_samples = 2048000 # number of sdr samples for each chunk of data
 	log = "adsb.log"
-
-	pos_ref = [21.315603, -157.858093] # Honolulu's latitude, longitude
 	
 	# create an input output FIFO queues
 	Qin = queue.Queue()
@@ -70,12 +77,16 @@ def main():
 	stop_flag = threading.Event()
 	
 	# initialize threads
-	t_sdr_read = threading.Thread(target = sdr_read,   args = (Qin, sdr, N_samples, stop_flag  ))
+	t_sdr_read = threading.Thread(target = sdr_read, args = (Qin, sdr, N_samples, stop_flag  ))
 	t_signal_process = threading.Thread(target = signal_process, args = ( Qin, source, stop_flag, log))
 	
 	# start threads
 	t_sdr_read.start()
 	t_signal_process.start()
+	
+	# Start Dash server
+	app.server(pos_ref, adsb_objects, packets)
+	app.app.run_server()
 	
 	# Run until the threads stop
 	while threading.active_count() > 0:
