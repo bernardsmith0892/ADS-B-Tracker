@@ -59,6 +59,9 @@ def signal_process( Qin, source, stop_flag, log  ):
 	
 		
 def main():
+	# Start Dash server
+	app.server(pos_ref, adsb_objects, packets)
+
 	fs = 2000000; # 2MHz sampling frequency
 	center_freq = 1090e6 # 1090 MHz center frequency
 	gain = 49.6 # gain
@@ -84,8 +87,6 @@ def main():
 	t_sdr_read.start()
 	t_signal_process.start()
 	
-	# Start Dash server
-	app.server(pos_ref, adsb_objects, packets)
 	app.app.run_server()
 	
 	# Run until the threads stop

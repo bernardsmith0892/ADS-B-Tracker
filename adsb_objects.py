@@ -2,6 +2,7 @@ import numpy as np
 from numpy import *
 import pyModeS as pms
 import time
+from datetime import datetime
 import pandas as pd
 
 def print_dashboard(adsb_objects):
@@ -87,7 +88,8 @@ class Packet:
 		return f"<ADSB_Packet msg:{self.msg}>"
 		
 	def __str__(self):
-		return f"[{self.timestamp}] {'Short' if self.short else 'Long'} DF{self.df} ICAO: {self.icao} typecode: {self.typecode} MSG:{self.msg}"
+		dtg = datetime.fromtimestamp(self.timestamp).strftime('%d/%b/%Y %H:%M:%S')
+		return f"[{dtg}] {'Short' if self.short else 'Long'} DF{self.df} ICAO: {self.icao} typecode: {self.typecode} MSG:{self.msg}"
 		
 class ADSB_Object:
 	icao = None
@@ -98,6 +100,7 @@ class ADSB_Object:
 	pos = [None, None]
 	pos_ref = [21.315603, -157.858093] # Reference for Honolulu, Hawaii
 	last_update = None
+	TTL = 90
 	
 	def __init__(self, packet=None):
 		self.pos_ref = [21.315603, -157.858093]
@@ -108,7 +111,7 @@ class ADSB_Object:
 		return f"<ADSB_Object icao:{self.icao}>"
 		
 	def __str__(self):
-		ret_str = f"{self.icao},{self.callsign},{self.pos[0]},{self.pos[1]},{self.altitude},{self.velocity},{self.heading},{ int( time.time() - self.last_update) }"
+		ret_str = f"{self.icao},{self.callsign},{self.pos[0]},{self.pos[1]},{self.altitude},{self.velocity},{self.heading},{ int( time.time() - self.last_update ) }"
 		
 		return ret_str
 	
