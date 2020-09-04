@@ -6,6 +6,11 @@ th, td {
   padding: 3px;
 }
 
+caption {
+ font-weight: bold;
+ font-size: 120%;
+}
+
 div {
  font-family : monospace;
 }

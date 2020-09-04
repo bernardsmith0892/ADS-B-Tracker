@@ -1,11 +1,15 @@
 import dash
-import dash_table
 import dash_core_components as dcc
 import dash_html_components as html
 from dash.dependencies import Input, Output
 
 import plotly.express as px
 import pandas as pd
+
+# Suppress non-error logging to the console
+import logging
+log = logging.getLogger('werkzeug')
+log.setLevel(logging.ERROR)
 
 external_stylesheets = ['app.css']
 app = dash.Dash(__name__, title='ADS-B Tracker', update_title=None, external_stylesheets=external_stylesheets)
@@ -31,21 +35,22 @@ def asdb_objects_to_df(adsb_objects):
 	return df
 	
 def ttl_inverse(ts):
-	if ts >= 90:
+	if ts >= TTL:
 		return 0
 	else:
-		return 90 - ts
+		return TTL - ts
 
 def server(pos_ref, adsb_objects, packets):
-	ref_obj = {'ICAO':None, 'Callsign':'REF_PNT', 'Latitude':pos_ref['lat'], 'Longitude':pos_ref['lon'], 'Altitude':None, 'Velocity':None, 'Heading':None, 'Age':0}
-
 	df = asdb_objects_to_df(adsb_objects)
-	df = df.append(ref_obj, ignore_index=True)
-	df['Age'] = df['Age'].apply(ttl_inverse)
-	fig = px.scatter_mapbox(df, lat='Latitude', lon='Longitude', text='ICAO', hover_data=['ICAO', 'Callsign', 'Latitude', 'Longitude', 'Altitude', 'Velocity', 'Heading', 'Age'], center=pos_ref, zoom=10,
-			mapbox_style="carto-positron", size='Age', size_max=10)
-		
-	fig.show()
+	df['Age'] = df['Age'].apply(ttl_inverse)	
+	
+	fig = px.scatter_mapbox(center=pos_ref,	mapbox_style="carto-positron")
+	fig['layout']['uirevision'] = True
+	fig['layout']['margin']['t'] = 5
+	fig['layout']['margin']['b'] = 5
+	
+	fig.add_scattermapbox(lat=[pos_ref['lat']], lon=[pos_ref['lon']], text='Grnd Stn', hoverinfo="text", name='Ground Station')
+	fig.add_scattermapbox(lat=df['Latitude'], lon=df['Longitude'], text=df['ICAO'], hoverinfo="text", name='Aircraft')
 	
 	adsb_table_div = html.Div(
 		children=generate_table(df),
@@ -64,7 +69,7 @@ def server(pos_ref, adsb_objects, packets):
 	) 
 
 	app.layout = html.Div(children=[
-		html.H2(
+		html.H1(
 			children='ADS-B Tracker'
 		),
 		
@@ -82,17 +87,21 @@ def server(pos_ref, adsb_objects, packets):
 				id='interval-component',
 				interval=1*1000, # in milliseconds
 				n_intervals=0
-		)
-	])
+		)]
+	)
 
 	@app.callback(Output('adsb-map', 'figure'),
 				  [Input('interval-component', 'n_intervals')])
 	def update_map(n):
 		df = asdb_objects_to_df(adsb_objects)
-		df = df.append(ref_obj, ignore_index=True)
 		df['Age'] = df['Age'].apply(ttl_inverse)
-		fig = px.scatter_mapbox(df, lat='Latitude', lon='Longitude', text='ICAO', hover_data=['ICAO', 'Callsign', 'Latitude', 'Longitude', 'Altitude', 'Velocity', 'Heading', 'Age'], center=pos_ref, zoom=10,
-			mapbox_style="carto-positron", size='Age', size_max=10)
+		fig = px.scatter_mapbox(center=pos_ref,	mapbox_style="carto-positron")
+		fig['layout']['uirevision'] = True
+		fig['layout']['margin']['t'] = 5
+		fig['layout']['margin']['b'] = 5
+		
+		fig.add_scattermapbox(lat=[pos_ref['lat']], lon=[pos_ref['lon']], text='Grnd Stn', hoverinfo="text", name='Ground Station')
+		fig.add_scattermapbox(lat=df['Latitude'], lon=df['Longitude'], text=df['ICAO'], hoverinfo="text", name='Aircraft')
 		
 		return fig
 
@@ -105,7 +114,7 @@ def server(pos_ref, adsb_objects, packets):
 	@app.callback(Output('packet-list', 'children'),
 				  [Input('interval-component', 'n_intervals')])		
 	def update_packets(n):
-		MAX_LINES = 20
+		MAX_LINES = 25
 				
 		out_str = ""
 		

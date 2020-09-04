@@ -68,6 +68,7 @@ def print_dashboard_ASCII(adsb_objects):
 
 class Packet:
 	msg = None
+	snr = None
 	timestamp = -1
 
 	short = None
@@ -75,9 +76,10 @@ class Packet:
 	df = None
 	typecode = None
 	
-	def __init__( self, msg, timestamp = time.time()):
+	def __init__( self, msg, timestamp = None, snr = None):
 		self.msg = msg
-		self.timestamp = timestamp
+		self.timestamp = timestamp if timestamp != None else time.time()
+		self.snr = snr
 		self.short = ( len(msg) <= 14 )
 		
 		self.icao = pms.adsb.icao( msg )
@@ -89,7 +91,7 @@ class Packet:
 		
 	def __str__(self):
 		dtg = datetime.fromtimestamp(self.timestamp).strftime('%d/%b/%Y %H:%M:%S')
-		return f"[{dtg}] {'Short' if self.short else 'Long'} DF{self.df} ICAO: {self.icao} typecode: {self.typecode} MSG:{self.msg}"
+		return f"[{dtg}] {'Short' if self.short else 'Long'} DF{self.df} ICAO: {self.icao} typecode: {self.typecode} MSG:{self.msg} SNR:{self.snr:.2f}dB"
 		
 class ADSB_Object:
 	icao = None

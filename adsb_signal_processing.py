@@ -14,13 +14,15 @@ def detectPreamble(y):
 	-------
 	list
 		A list of indices of potential preambles in the signal
+	float
+		The noise floor for this chunk. Calculated from the mean strength.
 	"""
 	
 	idx_preamble = []
 	
 	y_mean = np.mean(y)
 	y_std = np.std(y)
-	thresh = y_mean + 3 * y_std
+	thresh = y_mean + 5 * y_std
 	
 	for i in range( len(y) - 16 ):
 		if y[i] >= thresh:
@@ -34,22 +36,22 @@ def detectPreamble(y):
 			if(high_mean > low_mean):
 				idx_preamble.append(i)	
 	
-	return idx_preamble
+	return idx_preamble, thresh
 
-def decode_ADSB(signal):
-	"""Attempts to decode the given signal as an ADS-B message.
+def decode_ADSB(signal, fix_1bit_errors=False):
+	"""Attempts to decode the given signal as an ADS-B message and calculate SNR.
 	
 	Parameters
 	----------
 	signal : numpy.array
 		The RF signal to decode. Must have a sample rate of 2MHz and be at least 240 samples long.
-	log : str, optional
-		The log file's location. If declared, appends decoded ADS-B packets to this file.
+	fix_1bit_errors : bool, optional
+		Whether or not to attempt to fix single bit errors.
 	
 	Returns
 	-------
 	string
-		Returns the ADS-B packet as a hex string, if the CRC check passes. Returns None if the CRC check fails.
+		If the CRC check passes, returns the hex string for the ADS-B packet. Returns None if the CRC check fails.
 	"""
 	
 	row_size = 16 + 112 * 2
@@ -72,4 +74,55 @@ def decode_ADSB(signal):
 	elif (pms.crc(msg[:14]) == 0):
 		return msg[:14]
 	
+	if fix_1bit_errors:
+		return correct_single_bit_error(msg)
+	else:
+		return None
+
+def SNR(signal, noise_floor):
+	"""Calculates the SNR of the signal based on a given noise floor.
+	
+	Parameters
+	----------
+	signal : numpy.array
+		The RF signal to compare.
+	noise_floor : float, optional
+		The value for the signal's noise floor.
+	
+	Returns
+	-------
+	float
+		SNR value for this packet.
+	"""
+	signal_mean = np.mean(signal)
+	
+	snr = 10 * np.log10( signal_mean / noise_floor )
+	
+	return snr
+	
+def correct_single_bit_error(msg):
+	num = int(msg, 16)
+	bit_length = len(bin(num)[2:])
+	
+	for k in range(bit_length):
+		test_num = num ^ (1 << k)
+		test_msg = hex(test_num)[2:]
+		
+		# CRC check for long message
+		if (pms.crc(test_msg) == 0):
+			print("*", end='')
+			return test_msg
+		# CRC check for short message
+		elif (pms.crc(test_msg[:14]) == 0):
+			print("*", end='')
+			return test_msg[:14]
+	
 	return None
+	
+	
+	
+	
+	
+	
+	
+	
