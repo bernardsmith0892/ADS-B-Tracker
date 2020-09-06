@@ -101,6 +101,20 @@ def SNR(signal, noise_floor):
 	return snr
 	
 def correct_single_bit_error(msg):
+	"""Attempts to correct a bit-flip error in an ADS-B message.
+	
+	Parameters
+	----------
+	msg : str
+		The hex-string ADS-B message.
+	
+	Returns
+	-------
+	str
+		If a solution is found, returns the corrected ADS-B message.
+		Returns None if no solution found.
+	"""
+	
 	num = int(msg, 16)
 	bit_length = len(bin(num)[2:])
 	
@@ -110,11 +124,11 @@ def correct_single_bit_error(msg):
 		
 		# CRC check for long message
 		if (pms.crc(test_msg) == 0):
-			print("*", end='')
+			print( '*' , end='', flush=True )
 			return test_msg
 		# CRC check for short message
 		elif (pms.crc(test_msg[:14]) == 0):
-			print("*", end='')
+			print( '*' , end='', flush=True )
 			return test_msg[:14]
 	
 	return None

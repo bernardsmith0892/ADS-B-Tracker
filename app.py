@@ -12,20 +12,52 @@ log = logging.getLogger('werkzeug')
 log.setLevel(logging.ERROR)
 
 external_stylesheets = ['app.css']
+mapstyle = 'carto-positron'
 app = dash.Dash(__name__, title='ADS-B Tracker', update_title=None, external_stylesheets=external_stylesheets)
 
-TTL = 90
-
-def generate_table(dataframe, max_rows=26):
-	table = [html.Caption("Tracked Aircraft")] + [html.Tr([html.Th(col) for col in dataframe.columns]) ] + [html.Tr([html.Td(dataframe.iloc[i][col]) for col in dataframe.columns]) for i in range(min(len(dataframe), max_rows))]
+def generate_table(df, max_rows=26):
+	"""
+	Generate an HTML table for a DataFrame using Dash HTML components. Taken from: https://stackoverflow.com/questions/52213738/html-dash-table
+	
+	Parameters
+	----------
+	df : pd.DataFrame
+		The DataFrame to convert into an HTML table.
+	max_rows : int, optional
+		The maximum number of rows to output into the table.
+	
+	Returns
+	-------
+	html.Table
+		The HTML version of the given DataFrame.
+	
+	"""
+	
+	table = [html.Caption("Tracked Aircraft")] + [html.Tr([html.Th(col) for col in df.columns]) ] + [html.Tr([html.Td(df.iloc[i][col]) for col in df.columns]) for i in range(min(len(df), max_rows))]
 			
 	return html.Table(
 		children=table
     )
 	
-def asdb_objects_to_df(adsb_objects):
-	if len(adsb_objects) > 0:
-		df = pd.DataFrame( adsb_objects.values() )
+	
+def planes_to_df(planes):
+	"""
+	Convert a dict of Plane objects into a pd.DataFrame.
+	Performs check to properly handle and convert an empty dictionary.
+	
+	Parameters
+	----------
+	planes : dict(ao.Plane)
+		A dictionary of Plane objects. Key value is arbitrary.
+	
+	Returns
+	-------
+	pd.DataFrame
+		An 8-column DataFrame converted from the dictionary.
+	"""
+	
+	if len(planes) > 0:
+		df = pd.DataFrame( planes.values() )
 	else:
 		df = pd.DataFrame( [None] * 7 + [0] )
 		df = df.T
@@ -34,24 +66,28 @@ def asdb_objects_to_df(adsb_objects):
 	
 	return df
 	
-def ttl_inverse(ts):
-	if ts >= TTL:
-		return 0
-	else:
-		return TTL - ts
-
-def server(pos_ref, adsb_objects, packets):
-	df = asdb_objects_to_df(adsb_objects)
-	df['Age'] = df['Age'].apply(ttl_inverse)	
 	
-	fig = px.scatter_mapbox(center=pos_ref,	mapbox_style="carto-positron")
-	fig['layout']['uirevision'] = True
-	fig['layout']['margin']['t'] = 5
-	fig['layout']['margin']['b'] = 5
+def server(pos_ref, planes, packets):
+	"""
+	Setup the Dash web server to display air traffic information.
 	
-	fig.add_scattermapbox(lat=[pos_ref['lat']], lon=[pos_ref['lon']], text='Grnd Stn', hoverinfo="text", name='Ground Station')
-	fig.add_scattermapbox(lat=df['Latitude'], lon=df['Longitude'], text=df['ICAO'], hoverinfo="text", name='Aircraft')
+	Parameters
+	----------
+	pos_ref : list(float)
+		The location of the tracker's ground station. Used as the initial center for the map.
+	planes : dict(ao.Plane)
+		Dictionary of the currently tracked aircraft.
+		Dictionary of the currently tracked aircraft.
+		Positions are plotted on the map and detailed information is displayed in the table.
+	packets : list(ao.Packet)
+		List of the last received ADS-B packets. Their information and timestamp is displayed on the dashboard.	
+	"""
 	
+	# Initial setup for the map
+	df = planes_to_df(planes)
+	map = px.scatter_mapbox(center={ 'lat' : pos_ref[0], 'lon' : pos_ref[1] }, mapbox_style = mapstyle)
+	
+	# Setting up the div information for the aircraft table and packet displays
 	adsb_table_div = html.Div(
 		children=generate_table(df),
 		id='adsb-table',
@@ -59,7 +95,6 @@ def server(pos_ref, adsb_objects, packets):
 			"width" : "50%"
 		}
 	)
-		
 	packet_div = html.Div(
 		id='packet-list',
 		children="",
@@ -68,21 +103,28 @@ def server(pos_ref, adsb_objects, packets):
 		}
 	) 
 
+	# Layout of the webpage
 	app.layout = html.Div(children=[
+		# Title header
 		html.H1(
 			children='ADS-B Tracker'
 		),
 		
+		# Map display
 		dcc.Graph(
 			id='adsb-map',
-			figure=fig
+			figure=map
 		),
 		
+		# The aircraft table and packet displays
 		html.Div(
 			children=[adsb_table_div, packet_div],
-			style={ "display" : "flex" }
+			style={ 
+				"display" : "flex" 
+			}
 		),		
 	
+		# Request an update every second
 		dcc.Interval(
 				id='interval-component',
 				interval=1*1000, # in milliseconds
@@ -90,27 +132,30 @@ def server(pos_ref, adsb_objects, packets):
 		)]
 	)
 
+	# Function to update map data
 	@app.callback(Output('adsb-map', 'figure'),
 				  [Input('interval-component', 'n_intervals')])
 	def update_map(n):
-		df = asdb_objects_to_df(adsb_objects)
-		df['Age'] = df['Age'].apply(ttl_inverse)
-		fig = px.scatter_mapbox(center=pos_ref,	mapbox_style="carto-positron")
-		fig['layout']['uirevision'] = True
-		fig['layout']['margin']['t'] = 5
-		fig['layout']['margin']['b'] = 5
+		df = planes_to_df(planes)
 		
-		fig.add_scattermapbox(lat=[pos_ref['lat']], lon=[pos_ref['lon']], text='Grnd Stn', hoverinfo="text", name='Ground Station')
-		fig.add_scattermapbox(lat=df['Latitude'], lon=df['Longitude'], text=df['ICAO'], hoverinfo="text", name='Aircraft')
+		map = px.scatter_mapbox(center={ 'lat' : pos_ref[0], 'lon' : pos_ref[1] }, mapbox_style = mapstyle)
+		map['layout']['uirevision'] = True
+		map['layout']['margin']['t'] = 5
+		map['layout']['margin']['b'] = 5
 		
-		return fig
+		map.add_scattermapbox(lat=[pos_ref[0]], lon=[pos_ref[1]], text='Grnd Stn', hoverinfo="text", name='Ground Station')
+		map.add_scattermapbox(lat=df['Latitude'], lon=df['Longitude'], text=df['ICAO'], hoverinfo="text", name='Aircraft')
+		
+		return map
 
+	# Function to update the aircraft table
 	@app.callback(Output('adsb-table', 'children'),
 				  [Input('interval-component', 'n_intervals')])
 	def update_table(n):
-		df = asdb_objects_to_df(adsb_objects)
+		df = planes_to_df(planes)
 		return generate_table(df)
 
+	# Function to update packet display
 	@app.callback(Output('packet-list', 'children'),
 				  [Input('interval-component', 'n_intervals')])		
 	def update_packets(n):

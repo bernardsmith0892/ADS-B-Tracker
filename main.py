@@ -7,18 +7,23 @@ import threading, time, queue
 import pandas as pd
 import time
 import argparse
+import requests
 
 # Import program modules
 import adsb_signal_processing as asp
 import adsb_objects as ao
 import app
 
-adsb_objects = {}
+planes = {}
 packets = []
 PACKET_BUFF_SIZE = 256
 TTL = 100
 
 def sdr_read( Qin, sdr, N_samples, stop_flag ):
+	"""
+	Modified from UC Berkeley's EE123 course. Processes reads N_samples from the RTL-SDR and provides it
+		to the 'signal_process' thread.
+	"""
 	while (  not stop_flag.is_set() ):
 		try:
 			data_chunk = abs(sdr.read_samples(N_samples))   # get samples 
@@ -31,26 +36,29 @@ def sdr_read( Qin, sdr, N_samples, stop_flag ):
 
 	sdr.close()
 
-def signal_process( Qin, source, stop_flag, log, FIX_1BIT_ERRORS=False  ):
-	row_size = 16 + 112*2
+def signal_process( Qin, source, stop_flag, log, pos_ref, FIX_1BIT_ERRORS=False  ):
+	"""
+	Modified from UC Berkeley's EE123 course. Processes RF chunks provided by the 'sdr_read' thread.
+	"""
+
+	row_size = 16 + 112*2 #240 bits
 	
 	while(  not stop_flag.is_set() ):
 		curr_time = time.strftime('%d/%b/%Y %H:%M:%S', time.localtime())
-		# ao.print_dashboard( adsb_objects )
-				
-		# Get streaming chunk
+		
+		# Get streaming chunk from sdr_read thread
 		y = Qin.get();
 			
 		packet_diff = len(packets)
 		idx_preamble, noise_floor = asp.detectPreamble(y)		
 		for n in idx_preamble:
 			signal = abs(y[int(n) : int(n) + row_size])
-			msg = asp.decode_ADSB( signal, fix_1bit_errors=FIX_1BIT_ERRORS )
+			msg = asp.decode_ADSB( signal, FIX_1BIT_ERRORS )
 			if msg != None:
 				snr = asp.SNR(signal, noise_floor)
 				pkt = ao.Packet(msg, time.time(), snr)
 				packets.append( pkt )
-				print( '!' , end=' ' )
+				print( '!' , end='', flush=True )
 				
 				if len(packets) > PACKET_BUFF_SIZE:
 					packets.pop(0)
@@ -62,23 +70,23 @@ def signal_process( Qin, source, stop_flag, log, FIX_1BIT_ERRORS=False  ):
 					except:
 						print(f"Error writing to {log}!")
 				
-				if pkt.icao in adsb_objects:
-					adsb_objects[pkt.icao].process_packet( pkt )
+				if pkt.icao in planes:
+					planes[pkt.icao].process_packet( pkt )
 				elif pkt.icao != None:
-					adsb_objects[pkt.icao] = ao.ADSB_Object( pkt )
+					planes[pkt.icao] = ao.Plane( pkt, pos_ref )
 		
 		if packet_diff == len(packets):
-			packets.append(f"[{curr_time}] None received...")
-			print('.', end=' ')
+			# packets.append(f"[{curr_time}] None received...")
+			print( '.' , end='', flush=True )
 		
 		# Remove excess objects
 		to_delete = []
-		for o in adsb_objects.keys():
-			if (time.time() - adsb_objects[o].last_update) >= TTL:
-				to_delete.append(o)
+		for p in planes.keys():
+			if (time.time() - planes[p].last_update) >= TTL:
+				to_delete.append(p)
 		
-		for o in to_delete:
-			adsb_objects.pop(o)
+		for p in to_delete:
+			planes.pop(p)
 		
 		Qin.queue.clear()
 	
@@ -98,8 +106,8 @@ def main():
 		type=float, 
 		nargs=2, 
 		metavar=('Lat', 'Lon'), 
-		default=(21.315603, -157.858093),
-		help='Set the latitude and longitude of your ground station. Usually your current location. Defaults to Honolulu, Hawaii.'
+		default=(None, None),
+		help='Set the latitude and longitude of your ground station; usually your current location. If unset, attempts to determine your location using your IP address.'
 	)
 	parser.add_argument('--TTL', '-t',
 		type=int, 
@@ -125,14 +133,28 @@ def main():
 	)
 	args = parser.parse_args()
 	
-	# Variable initalization
+	# Variable initialization
 	fs = 2000000; # 2MHz sampling frequency
 	center_freq = 1090e6 # 1090 MHz center frequency
-	gain = 49.6 # gain
-	N_samples = 2048000 # number of sdr samples for each chunk of data
-	pos_ref = {'lat': args.location[0], 'lon': args.location[1]}
-	TTL = args.TTL
-	log = args.log
+	gain = 49.6 # Gain
+	N_samples = 2048000 # SDR samples for each chunk of data ( Approx 1.024 seconds per chunk )
+	TTL = args.TTL # How long to store ADS-B object information
+	log = args.log # Where to log packets
+	
+	# Determine ground station location using IP address or manual input
+	if args.location[0] == None or args.location[1] == None:
+		try:
+			url = 'https://ipinfo.io'
+			loc_request = requests.get(url)
+			lat_lon = loc_request.json()['loc'].split(',')
+			pos_ref = [ float(lat_lon[0]), float(lat_lon[1]) ]
+		except Exception:
+			print(f'Error requesting location information from {url}')
+			exit()
+	else:
+		pos_ref = [args.location[0], args.location[1]]
+	
+	# Determine whether to fix 1-bit errors
 	FIX_1BIT_ERRORS = (
 		args.fix_single_bit_errors[0] == 'Y' or 
 		args.fix_single_bit_errors[0] == 'y' or 
@@ -143,12 +165,12 @@ def main():
 
 
 	# Setup Dash server
-	app.server(pos_ref, adsb_objects, packets)
+	app.server(pos_ref, planes, packets)
 	
-	# create an input output FIFO queues
+	# Create a queue for communication between the reading and processing threads
 	Qin = queue.Queue()
 	
-	# create a pyaudio object
+	# Setup the RTL-SDR reader
 	sdr = RtlSdr(args.rtl_device)
 	sdr.sample_rate = fs	# sampling rate
 	sdr.center_freq = center_freq   # 1090MhZ center frequency
@@ -156,14 +178,14 @@ def main():
 	
 	stop_flag = threading.Event()
 	
-	# initialize threads
+	# Setup the reading and processing threads
 	t_sdr_read = threading.Thread(target = sdr_read, args = (Qin, sdr, N_samples, stop_flag  ))
-	t_signal_process = threading.Thread(target = signal_process, args = ( Qin, source, stop_flag, log, FIX_1BIT_ERRORS))
+	t_signal_process = threading.Thread(target = signal_process, args = ( Qin, source, stop_flag, log, pos_ref, FIX_1BIT_ERRORS))
 	
-	# start threads
 	t_sdr_read.start()
 	t_signal_process.start()
 	
+	# Run the Dash web server
 	app.app.run_server(port = args.port)
 	
 	# Run until the threads stop
