@@ -1,7 +1,7 @@
 # ADS-B Tracker
 Program to decode ADS-B signals from an RTLSDR and track aircraft on a map. Makes use of a Dash webserver to display the dashboard.
  
-The foundational code comes from UC Berkeley's EE123 Lab 2, namely the main three functions that reads data from the RTLSDR (`main`, `signal_process`, and `sdr_read`) and the clever way to perform Manchester decoding (` bits = chunk[16::2] > signal[17::2] `). But the code to detect ADS-B preambles, decode the RF signal, the display dashboard, and the classes to process packets are mine. (Obviously excluding imported functionality such as Plotly and Dash)
+The foundational code comes from UC Berkeley's EE123 Lab 2, namely the main three functions that reads data from the RTLSDR (`main`, `signal_process`, and `sdr_read`) and the clever way to perform Manchester decoding (` bits = chunk[16::2] > signal[17::2] `). But the code to detect ADS-B preambles, decode the RF signal, display the web dashboard, and the classes to process packets are mine. (Obviously excluding imported functionality such as Plotly and Dash)
 
 ```text
 usage: main.py [-h] [--rtl_device device_index] [--location Lat Lon] [--TTL TTL] [--port PORT] [--log LOG]
