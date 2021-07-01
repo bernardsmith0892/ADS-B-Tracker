@@ -57,7 +57,7 @@ def decode_ADSB(signal, fix_1bit_errors=False):
 	row_size = 16 + 112 * 2
 	msg = None
 	
-	# Exit if signal's sample size is two small
+	# Exit if signal's sample size is too small
 	if (len(signal) < row_size):
 		return
 	
